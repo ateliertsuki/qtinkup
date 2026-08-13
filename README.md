@@ -1,100 +1,110 @@
-# tinkup
+# QTinkup
 
-A multiplatform utility for performing firmware updates on the RetroTINK
-family of retrogaming devices.
+A Qt 6 desktop application for updating [RetroTINK](https://www.retrotink.com) firmware.
 
-See the [RetroTINK homepage](https://www.retrotink.com) for more information
-about RetroTINK devices.
+QTinkup is a GUI fork of [`tinkup.py`](https://github.com/rmull/tinkup) by Ryan Mullen. It speaks the same
+bootloader protocol, byte for byte, but replaces the command-line workflow with a small
+native window: pick a serial port, pick a firmware file, press Start.
 
-Information about firmware updates for each of the RetroTINK devices, as well
-as links to the canonical (Windows-only) firmware update utility and links to
-the firmware images (hex files) themselves can be found at the [RetroTINK
-Blog](https://www.retrotink.com/blog).
+![QTinkup main window](docs/screenshot.png)
 
-## Liability
+## Features
 
-This is a third party utility that is not maintained by the official RetroTINK
-team. Use at your own risk. Please review the following:
+- **Port dropdown** populated with every serial port detected at startup. FTDI devices —
+  what RetroTINK hardware enumerates as — are preselected automatically.
+- **Progress bar** that advances in 5% checkpoints as firmware records are transmitted.
+- **Status label** reporting the current phase: `Ready!`, `Writing...`, `Success!`, or
+  `Error occurred. Check logs.`
+- **Firmware validation** before the port is ever opened — every HEX record checksum is
+  verified, so a corrupt file fails immediately instead of halfway through a flash.
+- **Watchdog timeouts** (5 s for probe/write acknowledgements, 60 s for the flash erase),
+  so a device that stops responding can't hang the application.
+- **Deterministic cleanup** — open file buffers and the serial port are closed on the Exit
+  menu action, on window close, and on any error path.
 
-- The RetroTINK bootloader exists in protected memory space, and this tool is
-  only able to erase the firmware application. Thus, it should not be possible
-to brick your RetroTINK, but you will be able to erase your firmware and render
-your device unbootable until a successful firmware update is performed.
+## Requirements
 
-- This utility does not attempt to verify that the hex file you specify
-  matches the hardware platform you are updating. Please ensure that you are
-downloading the hex file that is appropriate for the device you are updating.
+- Qt 6.9 or newer, with the **Widgets** and **SerialPort** modules (I used 6.9.3 at the time of writing)
+- CMake 3.21 or newer
+- A C++17 compiler (Clang, GCC, or MSVC)
 
-- If something goes wrong mid-update and you are left with an unbootable
-  RetroTINK, simply reattempt the update from the beginning and all should be
-recoverable.
+## Building
 
-This project does not handle general RetroTINK support requests. If something
-goes wrong specifically while using tinkup.py, please feel free to reach out
-here on Github and we'll see what we can do to improve this software.
+```sh
+cmake -B build -DCMAKE_PREFIX_PATH=/path/to/Qt/x.y.z/<platform>
+cmake --build build
+```
 
-## Installation
+Point `CMAKE_PREFIX_PATH` at the Qt kit directory for your platform — for example
+`~/Qt/6.9.3/macos`, `~/Qt/6.9.3/gcc_64`, or `C:/Qt/6.9.3/msvc2022_64`. If Qt 6 came from
+your distribution's package manager (`qt6-base-dev` and `qt6-serialport-dev` on Debian and
+Ubuntu), you can omit the flag entirely.
 
-### Dependencies
+The build produces `qtinkup.app` on macOS and `qtinkup` (or `qtinkup.exe`) elsewhere.
 
-- Python 3
+### Platform notes
 
-See [Python.org](https://www.python.org) for installation details.
-
-Windows users: Check the optional box for "Adding Python to PATH" during the
-installation wizard. This allows the python executable to be accessed from the
-command line without needing to specify its absolute path.
-
-- pySerial
-
-Install with Python's package manager pip from a command line:
-
-`python3 -m pip install pyserial`
-
-Your system might have Python 3 installed simply as `python` rather than
-`python3`, so try that if `python3` is not found. If neither are found, please
-double check your Python installation, and Windows users should note the "Add
-Python to PATH" requirement mentioned above.
-
-More info about pySerial [here](https://github.com/pyserial/pyserial).
-
-- Driver support for FTDI serial devices.
-
-This depends on your operating system. If your RetroTINK is not detected by
-tinkup on the first try, look for the VCP drivers for your platform on the
-[FTDI website](https://ftdichip.com/drivers/vcp-drivers/). You shouldn't need
-to bother with these if attaching the RetroTINK in firmware update mode causes
-a new USB serial device to be detected by your OS.
-
-Linux users: You will need read/write permission on the serial device used to
-communicate with your RetroTINK, typically /dev/ttyUSB0. This can be achieved
-using `sudo` or running `tinkup.py` as root. A better way may be to add your
-user to the group that owns the serial device, which will grant your user
-indefinite access without requiring elevation to root. With the RetroTINK
-plugged in and the serial device available at /dev/ttyUSB0, run the following
-command (substitute your username for "youruser") and then reboot:
-
-`sudo usermod -a -G $(ls -l /dev/ttyUSB0 | cut -d" " -f4) youruser`
+- **Windows** — the executable is built for the GUI subsystem, so it has no attached
+  console and log output is not visible when launched by double-click. Run it from a
+  terminal to see the logs, or set `WIN32_EXECUTABLE OFF` in `CMakeLists.txt` if you would
+  rather always have a console window. Use `windeployqt` to gather the Qt DLLs for
+  distribution.
+- **Linux** — serial port access usually requires membership in the `dialout` group (`uucp`
+  on Arch): `sudo usermod -aG dialout $USER`, then log out and back in. **THIS IS IMPORTANT**
+- **macOS** — no additional setup; the FTDI driver is built into recent macOS versions.
 
 ## Usage
 
-1. Download the hex file for your specific model of RetroTINK by visiting the
-[RetroTINK Firmware Repository](https://retrotink-llc.github.io/firmware/).
+1. Put the device into bootloader mode and connect it over USB.
+2. Launch QTinkup. The port dropdown fills automatically; an FTDI device is preselected.
+3. Click **Browse…** and choose the firmware `.hex` file.
+4. Press **Start**.
 
-2. Attach a USB cable between your host PC and the RetroTINK while holding the
-   correct button on the RetroTINK to put it in update mode. Details about this
-procedure can be seen on [YouTube](https://www.youtube.com/watch?v=Bva0JXLoq7E).
+The status label shows `Writing...` while records stream to the device and `Success!` when
+the firmware has been written and the device instructed to boot it. Logs go to standard
+error throughout — run from a terminal to follow along.
 
-3. Run tinkup.py with a path to your firmware hex file specified as the only
-argument:
+> **Do not disconnect the device or quit the application during an update.** The flash is
+> erased before the first record is written, so an interrupted update leaves the device in
+> the bootloader with no valid firmware. Recovery is simply running the update again.
 
-`python3 tinkup.py firmware.hex`
+## Project layout
 
-As with the pySerial installation, if your system has installed Python 3 simply
-named `python`, use that instead of `python3`.
+```
+src/tink.{h,cpp}         Bootloader protocol engine (framing, CRC, state machines)
+src/mainwindow.{h,cpp}   QWidgets user interface
+src/main.cpp             Entry point and application version
+tests/test_tink.cpp      Unit tests for the protocol engine
+tinkup.py                The original script, kept for reference
+```
 
-tinkup should automatically identify your RetroTINK and proceed with the
-update. It will print an error if it can't identify your RetroTINK or if it
-detects several RetroTINKs or similar devices connected to the same system 
-(since it doesn't know which one it should be updating).
+The protocol engine has no dependency on the UI: it is a `QObject` that emits
+`progress`, `writingStarted`, and `finished` signals, driven entirely by `QSerialPort`
+events on the main thread.
 
+## Tests
+
+```sh
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+The suite covers the parts where a mistake would corrupt a device: CRC values, 
+frame construction and control-byte escaping,the receive state machine's deframing 
+and unescaping, rejection of corrupt CRCs, HEX file validation, and a simulated 
+end-to-end update session that exercises every bootloader state transition without hardware.
+
+## Credits
+
+- Original [`tinkup.py`](https://github.com/rmull/tinkup) by **Ryan Mullen**
+  ([@rmull](https://github.com/rmull)) — all protocol design and reverse engineering. 
+- Qt 6 fork by **Roberto M.** ([@ateliertsuki](https://github.com/ateliertsuki)).
+
+## License
+
+See LICENSE
+
+## Disclaimer
+
+Not affiliated with or endorsed by RetroTINK. Flashing firmware carries risk; use at your
+own risk.
