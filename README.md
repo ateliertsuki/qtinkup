@@ -13,8 +13,6 @@ native window: pick a serial port, pick a firmware file, press Start.
 - **Port dropdown** populated with every serial port detected at startup. FTDI devices —
   what RetroTINK hardware enumerates as — are preselected automatically.
 - **Progress bar** that advances in 5% checkpoints as firmware records are transmitted.
-- **Status label** reporting the current phase: `Ready!`, `Writing...`, `Success!`, or
-  `Error occurred. Check logs.`
 - **Firmware validation** before the port is ever opened — every HEX record checksum is
   verified, so a corrupt file fails immediately instead of halfway through a flash.
 - **Watchdog timeouts** (5 s for probe/write acknowledgements, 60 s for the flash erase),
@@ -46,11 +44,9 @@ The build produces `qtinkup.app` on macOS and `qtinkup` (or `qtinkup.exe`) elsew
 
 - **Windows** — the executable is built for the GUI subsystem, so it has no attached
   console and log output is not visible when launched by double-click. Run it from a
-  terminal to see the logs, or set `WIN32_EXECUTABLE OFF` in `CMakeLists.txt` if you would
-  rather always have a console window. Use `windeployqt` to gather the Qt DLLs for
-  distribution.
-- **Linux** — serial port access usually requires membership in the `dialout` group (`uucp`
-  on Arch): `sudo usermod -aG dialout $USER`, then log out and back in. **THIS IS IMPORTANT**
+  terminal to see the logs.
+- **Linux**  **(THIS IS IMPORTANT)** — serial port access usually requires membership
+  in the `dialout` group (`uucp` on Arch): `sudo usermod -aG dialout $USER`, then log out and back in.
 - **macOS** — no additional setup; the FTDI driver is built into recent macOS versions.
 
 ## Usage
@@ -106,5 +102,5 @@ See LICENSE
 
 ## Disclaimer
 
-Not affiliated with or endorsed by RetroTINK. Flashing firmware carries risk; use at your
-own risk.
+Not affiliated with or endorsed by RetroTINK (for now...)
+Flashing firmware carries risk, use at your own risk.
