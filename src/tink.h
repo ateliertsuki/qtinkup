@@ -6,6 +6,14 @@
 #include <QSerialPort>
 #include <QTimer>
 
+enum class GroupStatus {
+    NotApplicable,   // not in Linux
+    NoSuchGroup,     // group doesn't exist
+    NotAMember,
+    ConfiguredOnly,  // in the DB, but not in this session (reboot required)
+    Active
+};
+
 // Fork of the tinkup.py RetroTINK bootloader engine.
 //
 // Frames are SOH <payload> <crc16-lo> <crc16-hi> EOT, with SOH/EOT/DLE
@@ -28,6 +36,10 @@ public:
 
     enum RxState { RxIdle, RxBuffer, RxEscape };
     enum BlState { BlIdle, BlVersion, BlErase, BlWrite, BlJump };
+
+    // these functions helps determining if a user is a member of dialup
+    static GroupStatus checkGroup(const char *groupName);
+    static QString currentUserName();
 
     // Probe/write acks arrive quickly, a full flash erase doesn't.
     static constexpr int ResponseTimeoutMs = 5000;

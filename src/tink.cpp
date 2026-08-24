@@ -1,5 +1,64 @@
 #include "tink.h"
 
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+#include <grp.h>
+#include <vector>
+#include <algorithm>
+
+namespace
+{
+    bool resolveGid(const char *name, gid_t *out)
+    {
+        long sz = ::sysconf(_SC_GETGR_R_SIZE_MAX);
+        std::vector<char> buf(sz > 0 ? size_t(sz) : 16384);
+        struct group g;
+        struct group *res = nullptr;
+        if (::getgrnam_r(name, &g, buf.data(), buf.size(), &res) != 0 || !res)
+            return false;
+        *out = g.gr_gid;
+        return true;
+    }
+
+    bool currentPasswd(struct passwd *pw, std::vector<char> &buf)
+    {
+        long sz = ::sysconf(_SC_GETPW_R_SIZE_MAX);
+        buf.resize(sz > 0 ? size_t(sz) : 16384);
+        struct passwd *res = nullptr;
+        if (::getpwuid_r(::getuid(), pw, buf.data(), buf.size(), &res) != 0 || !res)
+            return false;
+        return true;
+    }
+
+    bool activeInGid(gid_t target)
+    {
+        // POSIX leaves it unspecified whether getgroups() includes the effective gid.
+        if (target == ::getgid() || target == ::getegid())
+            return true;
+        int n = ::getgroups(0, nullptr);
+        if (n <= 0)
+            return false;
+        std::vector<gid_t> gids(static_cast<size_t>(n));
+        n = ::getgroups(n, gids.data());
+        if (n < 0)
+            return false;
+        return std::find(gids.begin(), gids.begin() + n, target) != gids.begin() + n;
+    }
+
+    bool configuredInGid(const struct passwd &pw, gid_t target)
+    {
+        int n = 0;
+        ::getgrouplist(pw.pw_name, pw.pw_gid, nullptr, &n);   // size probe
+        std::vector<gid_t> gids(size_t(n > 0 ? n : 1));
+        if (::getgrouplist(pw.pw_name, pw.pw_gid, gids.data(), &n) < 0)
+            return false;
+        return std::find(gids.begin(), gids.begin() + n, target) != gids.begin() + n;
+    }
+}
+#endif
+
 #include <QDebug>
 #include <QThread>
 
@@ -324,4 +383,37 @@ void Tink::fail(const QString &reason)
     qInfo().noquote() << reason;
     cleanup();
     emit finished(false);
+}
+
+GroupStatus Tink::checkGroup(const char *groupName)
+{
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+    gid_t target{};
+    if (!resolveGid(groupName, &target))
+        return GroupStatus::NoSuchGroup;
+
+    if (activeInGid(target))
+        return GroupStatus::Active;
+
+    struct passwd pw;
+    std::vector<char> buf;
+    if (currentPasswd(&pw, buf) && configuredInGid(pw, target))
+        return GroupStatus::ConfiguredOnly;
+
+    return GroupStatus::NotAMember;
+#else
+    Q_UNUSED(groupName);
+    return GroupStatus::NotApplicable;
+#endif
+}
+
+QString Tink::currentUserName()
+{
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+    struct passwd pw;
+    std::vector<char> buf;
+    if (currentPasswd(&pw, buf))
+        return QString::fromLocal8Bit(pw.pw_name);
+#endif
+    return qEnvironmentVariable("USER");
 }

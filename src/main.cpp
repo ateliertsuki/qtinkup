@@ -4,7 +4,7 @@
 
 // Single source of truth for the application version
 // can be read elsewhere through QApplication::applicationVersion()
-static const QString kVersion = QStringLiteral("1.0");
+static const QString kVersion = QStringLiteral("1.1");
 
 int main(int argc, char *argv[])
 {

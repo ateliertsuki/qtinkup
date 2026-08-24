@@ -31,6 +31,7 @@ private slots:
     void showAbout();
 
 private:
+    bool confirmSerialAccess();
     void populatePorts();
     void cleanup();
 

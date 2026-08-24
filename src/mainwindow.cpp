@@ -18,6 +18,7 @@
 #include <QStyle>
 #include <QStyleFactory>
 #include <QVBoxLayout>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -107,6 +108,40 @@ MainWindow::MainWindow(QWidget *parent)
                                         size(), screen->availableGeometry()));
 }
 
+bool MainWindow::confirmSerialAccess()
+{
+    const GroupStatus status = Tink::checkGroup("dialout");
+
+    if (status == GroupStatus::Active
+        || status == GroupStatus::NotApplicable
+        || status == GroupStatus::NoSuchGroup) {
+        return true;
+    }
+
+    const QString user = Tink::currentUserName();
+    QString detail;
+
+    if (status == GroupStatus::ConfiguredOnly) {
+        detail = tr("The user \"%1\" belongs to the \"dialout\" group, but this session "
+                    "started before that change took effect.\n\n"
+                    "Please reboot for changes to take effect.")
+                     .arg(user);
+    } else {
+        detail = tr("The user \"%1\" does not belong to the \"dialout\" group, which is "
+                    "normally required to open a serial port, please execute:\n\n"
+                    "    sudo usermod -aG dialout %1\n\n"
+                    "And then reboot for changes to take effect.")
+                     .arg(user);
+    }
+
+    const auto reply = QMessageBox::warning(
+        this, tr("Serial port group permissions"),
+        detail + tr("\n\nDo you want to continue anyways?"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+
+    return reply == QMessageBox::Yes;
+}
+
 void MainWindow::populatePorts()
 {
     m_portCombo->clear();
@@ -148,6 +183,9 @@ void MainWindow::startUpdate()
         qInfo() << "No firmware file selected";
         return;
     }
+
+    if (!confirmSerialAccess())
+        return;
 
     m_startButton->setEnabled(false);
     m_portCombo->setEnabled(false);
